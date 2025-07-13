@@ -22,23 +22,22 @@ export async function getCart(): Promise<ShoppingCart | null> {
 
   let cart: CartWithProduct | null = null;
 
-  if(session) {
+  if (session) {
     cart = await prisma.cart.findFirst({
-      where: { userId: session.user.id },
+      where: { userId: Number(session.user.id) },
       include: { items: { include: { product: true } } },
-    })
-
+    });
   } else {
-    const localCartId = cookies().get("localCartId")?.value;
-    cart = localCartId
-     ? await prisma.cart.findUnique({
-         where: { id: localCartId },
-         include: { items: { include: { product: true } } },
-       })
-     : null;
-  }
+    const localCartIdString = cookies().get("localCartId")?.value;
+    const localCartId = localCartIdString ? Number(localCartIdString) : null;
 
-  
+    cart = localCartId
+      ? await prisma.cart.findUnique({
+          where: { id: localCartId },
+          include: { items: { include: { product: true } } },
+        })
+      : null;
+  }
 
   if (!cart) {
     return null;
@@ -60,13 +59,13 @@ export async function createCart(): Promise<ShoppingCart> {
   let newCart: Cart;
   if (session) {
     newCart = await prisma.cart.create({
-      data: { userId: session.user.id },
+      data: { userId: Number(session.user.id) },
     });
   } else {
     newCart = await prisma.cart.create({
       data: {},
     });
-    cookies().set("localCartId", newCart.id);
+    cookies().set("localCartId", String(newCart.id)); // ✅ convert number to string
   }
 
   return {
@@ -78,57 +77,64 @@ export async function createCart(): Promise<ShoppingCart> {
 }
 
 export async function mergeAnonymusCartIntoUserCart(userId: string) {
-  const localCartId = cookies().get("localCartId")?.value;
+  const localCartIdString = cookies().get("localCartId")?.value;
+  const localCartId = localCartIdString ? Number(localCartIdString) : null;
 
-  const localCart = localCartId? await prisma.cart.findUnique({
-    where: { id: localCartId },
-    include: { items : true },
-  })
-  : null;
+  const localCart = localCartId
+    ? await prisma.cart.findUnique({
+        where: { id: localCartId },
+        include: { items: true },
+      })
+    : null;
 
-  if(!localCart) {
+  if (!localCart) {
     return;
   }
 
   const userCart = await prisma.cart.findFirst({
-    where: { userId },
-    include: { items : true },
-  })
+    where: { userId: Number(userId) },
+    include: { items: true },
+  });
 
-await prisma.$transaction(async tx => {
-    if(userCart) {
+  await prisma.$transaction(async (tx) => {
+    if (userCart) {
       const mergedCartItems = mergeCartItems(localCart.items, userCart.items);
 
       await tx.cartItem.deleteMany({
-        where: { cartId: userCart.id }
-      })
+        where: { cartId: userCart.id },
+      });
+
       await tx.cartItem.createMany({
-        data: mergedCartItems.map(item => ({
-          cartId : userCart.id,
+        data: mergedCartItems.map((item) => ({
+          cartId: userCart.id,
           productId: item.productId,
           quantity: item.quantity,
-        }))
-      })
-    }else {
+        })),
+      });
+    } else {
       await tx.cart.create({
         data: {
-          userId,
+          userId: Number(userId),
           items: {
             createMany: {
-              data: localCart.items.map(item => ({
+              data: localCart.items.map((item) => ({
                 productId: item.productId,
                 quantity: item.quantity,
-              }))
-            }
-          }
-        }
-      })
+              })),
+            },
+          },
+        },
+      });
     }
-    await tx.cart.delete({
-      where: { id: localCartId },
-    });
+
+    if (localCartId !== null) {
+      await tx.cart.delete({
+        where: { id: localCartId },
+      });
+    }
+
     cookies().set("localCartId", "");
-})
+  });
 }
 
 function mergeCartItems(...cartItems: CartItem[][]) {
@@ -140,7 +146,7 @@ function mergeCartItems(...cartItems: CartItem[][]) {
       } else {
         acc.push(item);
       }
-    })
+    });
     return acc;
   }, [] as CartItem[]);
 }

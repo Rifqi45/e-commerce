@@ -8,16 +8,16 @@ import { useTransition } from "react";
 
 interface CartEntryProps {
   cartItem: CartItemWithProduct;
-  setProductQuantity: (productId: string, quantity: number) => Promise<void>;
+  setProductQuantity: (productId: number, quantity: number) => Promise<void>;
 }
 
 export default function CartEntry({
   cartItem: { product, quantity },
-  setProductQuantity
+  setProductQuantity,
 }: CartEntryProps) {
   const [isPending, startTransition] = useTransition();
 
-  const quantityOptions : JSX.Element[] = [];
+  const quantityOptions: JSX.Element[] = [];
   for (let i = 1; i <= 99; i++) {
     quantityOptions.push(
       <option key={i} value={i}>
@@ -42,17 +42,16 @@ export default function CartEntry({
           </Link>
           <div>Price: {formatPrice(product.price)}</div>
           <div className="my-1 flex items-center gap-2">
-            Quantity: 
+            Quantity:
             <select
-            className="select select-bordered w-full max-w-[80px]"
-            defaultValue={quantity}
-            onChange={e => {
-              const newQuantity = parseInt(e.currentTarget.value);
-              startTransition(async () => {
-                await setProductQuantity(product.id, newQuantity);
-              })
-
-            }}
+              className="select-bordered select w-full max-w-[80px]"
+              defaultValue={quantity}
+              onChange={(e) => {
+                const newQuantity = parseInt(e.currentTarget.value);
+                startTransition(async () => {
+                  await setProductQuantity(product.id, newQuantity);
+                });
+              }}
             >
               <option value={0}> 0 (remove)</option>
               {quantityOptions}
@@ -60,7 +59,9 @@ export default function CartEntry({
           </div>
           <div className="flex items-center gap-2">
             Total: {formatPrice(product.price * quantity)}
-          {isPending && <span className="loading loading-spinner loading-sm"/>}
+            {isPending && (
+              <span className="loading loading-spinner loading-sm" />
+            )}
           </div>
         </div>
       </div>
